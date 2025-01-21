@@ -1,0 +1,75 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# Ruta del directorio de Termux:Boot
+BOOT_DIR="$HOME/.termux/boot"
+
+# Crear el directorio de inicio si no existe
+echo "Creando el directorio de inicio para Termux:Boot..."
+mkdir -p "$BOOT_DIR"
+echo "Directorio creado en $BOOT_DIR."
+
+# Crear el script de inicio para Termux:Boot
+BOOT_SCRIPT="$BOOT_DIR/start_services.sh"
+echo "Generando el script de inicio: $BOOT_SCRIPT..."
+cat << 'EOF' > "$BOOT_SCRIPT"
+#!/data/data/com.termux/files/usr/bin/bash
+
+# Directorios
+WEB_DIR="/data/data/com.termux/files/usr/share/apache2/default-site/htdocs"
+PROJECT_NAME="equipos_basicos"
+DB_ADMIN_DIR="$WEB_DIR/db_admin"
+
+# Iniciar MariaDB
+echo "Iniciando MariaDB..."
+if ! pgrep -x "mariadbd" > /dev/null; then
+    unset LD_PRELOAD  # Evita conflictos en Termux:Boot
+    nohup /data/data/com.termux/files/usr/bin/mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql > /data/data/com.termux/files/usr/var/log/mariadb_boot.log 2>&1 &
+    sleep 5
+    if pgrep -x "mariadbd" > /dev/null; then
+        echo "MariaDB iniciado correctamente."
+    else
+        echo "Error: No se pudo iniciar MariaDB. Revisa el log: /data/data/com.termux/files/usr/var/log/mariadb_boot.log"
+    fi
+else
+    echo "MariaDB ya está en ejecución."
+fi
+
+# Servir proyectos con PHP
+echo "Levantando servidor PHP para $PROJECT_NAME en localhost:8081..."
+php -S localhost:8081 -t "$WEB_DIR/$PROJECT_NAME" > /data/data/com.termux/files/usr/var/log/php_project1.log 2>&1 &
+
+echo "Levantando servidor PHP para db_admin en localhost:8082..."
+php -S localhost:8082 -t "$DB_ADMIN_DIR" > /data/data/com.termux/files/usr/var/log/php_admin.log 2>&1 &
+
+echo "Todos los servicios están activos."
+EOF
+
+# Dar permisos de ejecución al script
+chmod +x "$BOOT_SCRIPT"
+echo "Permisos de ejecución otorgados al script."
+
+# Configurar MariaDB en .bashrc
+echo "Configurando inicio automático de MariaDB en .bashrc..."
+BASHRC="$HOME/.bashrc"
+
+if [ ! -f "$BASHRC" ]; then
+    echo "El archivo .bashrc no existe. Creándolo..."
+    touch "$BASHRC"
+fi
+
+if ! grep -q "mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql" "$BASHRC"; then
+    echo "Iniciando MariaDB automáticamente al abrir Termux..." >> "$BASHRC"
+    echo "mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &" >> "$BASHRC"
+    echo "Configuración de .bashrc completada."
+else
+    echo "La configuración de MariaDB ya está presente en .bashrc."
+fi
+
+# Mensaje final
+echo "---------------------------------------------------------------"
+echo "Configuración de Termux:Boot y .bashrc completada."
+echo "El script de inicio está en: $BOOT_SCRIPT"
+echo "MariaDB se iniciará automáticamente al abrir Termux."
+echo "Para probar el script de inicio manualmente, ejecuta:"
+echo "  $BOOT_SCRIPT"
+echo "---------------------------------------------------------------"
