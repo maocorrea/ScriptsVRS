@@ -4,13 +4,12 @@
 WEB_DIR="/data/data/com.termux/files/usr/share/apache2/default-site/htdocs"
 PROJECT_NAME="formulario_caracterizacion"
 REPO_URL="desarrollos-binariit/formulario_caracterizacion"
-DOWNLOADS_DIR="/sdcard/Download"
+DOWNLOADS_DIR="/sdcard/Downloads"  # Ruta correcta en tu dispositivo
 MYSQL_ROOT_PASSWORD="alohomora"
 PHPMYADMIN_VERSION="5.1.4"
 PHP_INI_PATH="/data/data/com.termux/files/usr/etc/php/php.ini"
 SESSION_DIR="/data/data/com.termux/files/usr/tmp"
 LOG_DIR="/data/data/com.termux/files/usr/var/log"
-SYMLINK_PATH="/sdcard/htdocs"
 
 # 1. Solicitar el token al usuario
 get_github_token() {
@@ -109,31 +108,47 @@ EOL
     echo "phpMyAdmin configurado correctamente."
 }
 
-# 7. Clonar repositorio y verificar archivo SQL
-clone_repository_and_check_sql() {
+# 7. Clonar repositorio, validar y copiar archivo SQL
+clone_repository_and_copy_sql() {
+    REPO_DIR="$WEB_DIR/$PROJECT_NAME"
+
+    # Verificar si el repositorio ya existe
+    if [ -d "$REPO_DIR" ]; then
+        echo "El repositorio ya existe en $REPO_DIR."
+        echo "Preservando archivos protegidos y eliminando el repositorio..."
+        
+        # Crear una carpeta temporal para guardar los archivos protegidos
+        TEMP_DIR="$WEB_DIR/temp_protected"
+        mkdir -p "$TEMP_DIR"
+
+        # Mover archivos protegidos a la carpeta temporal
+        mv "$REPO_DIR"/config.php "$TEMP_DIR/" 2>/dev/null || true
+        mv "$REPO_DIR"/.env "$TEMP_DIR/" 2>/dev/null || true
+
+        # Eliminar el repositorio existente
+        rm -rf "$REPO_DIR"
+
+        # Restaurar los archivos protegidos después de clonar
+        echo "Archivos protegidos movidos a $TEMP_DIR. Serán restaurados después de clonar."
+    fi
+
     echo "Clonando repositorio de GitHub..."
-    gh repo clone "$REPO_URL" "$WEB_DIR/$PROJECT_NAME"
+    gh repo clone "$REPO_URL" "$REPO_DIR"
     if [ $? -ne 0 ]; then
         echo "Error: No se pudo clonar el repositorio."
         exit 1
     fi
-    echo "Repositorio clonado correctamente en $WEB_DIR/$PROJECT_NAME."
+    echo "Repositorio clonado correctamente en $REPO_DIR."
 
- 
-}
+    # Restaurar archivos protegidos
+    if [ -d "$TEMP_DIR" ]; then
+        mv "$TEMP_DIR"/* "$REPO_DIR/" 2>/dev/null || true
+        rmdir "$TEMP_DIR"
+        echo "Archivos protegidos restaurados en $REPO_DIR."
+    fi
 
-# 8. Iniciar servicios
-start_services() {
-    echo "Iniciando servicios..."
-    apachectl start
-    mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
-    echo "Servicios iniciados correctamente."
-}
-
-# 9. Mensaje final
-final_message() {
     # Buscar archivo SQL
-    SQL_FILE=$(find "$WEB_DIR/$PROJECT_NAME" -type f -name "*.sql")
+    SQL_FILE=$(find "$REPO_DIR" -type f -name "*.sql")
     if [[ -n "$SQL_FILE" ]]; then
         echo "Se encontró un archivo SQL: $SQL_FILE"
 
@@ -147,24 +162,36 @@ final_message() {
     else
         echo "No se encontró ningún archivo SQL en el repositorio clonado."
     fi
+}
 
+# 8. Iniciar servicios
+start_services() {
+    echo "Iniciando servicios..."
+    apachectl start
+    mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
+    echo "Servicios iniciados correctamente."
+}
+
+# 9. Mensaje final
+final_message() {
     echo "---------------------------------------------------------------"
     echo "Instalación completa."
     echo "Accede al proyecto en: http://localhost:8081"
     echo "Accede a phpMyAdmin en: http://localhost:8082"
-    echo "Usuario MariaDB: root | Contraseña: alo****** "
+    echo "Usuario MariaDB: root | Contraseña: $MYSQL_ROOT_PASSWORD"
     echo "---------------------------------------------------------------"
 }
 
 # Función principal
 main() {
+    termux-setup-storage
     get_github_token
     install_dependencies
     configure_apache
     setup_mariadb
     configure_php
     setup_phpmyadmin
-    clone_repository_and_check_sql
+    clone_repository_and_copy_sql
     start_services
     final_message
 }
