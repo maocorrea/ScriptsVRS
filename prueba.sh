@@ -4,7 +4,7 @@
 WEB_DIR="/data/data/com.termux/files/usr/share/apache2/default-site/htdocs"
 PROJECT_NAME="formulario_caracterizacion"
 REPO_URL="desarrollos-binariit/formulario_caracterizacion"
-DB_ADMIN_DIR="$WEB_DIR/db_admin"
+DOWNLOADS_DIR="$HOME/storage/downloads"
 MYSQL_ROOT_PASSWORD="alohomora"
 PHPMYADMIN_VERSION="5.1.4"
 PHP_INI_PATH="/data/data/com.termux/files/usr/etc/php/php.ini"
@@ -20,6 +20,14 @@ get_github_token() {
         echo "Error: El token de GitHub no puede estar vacío."
         exit 1
     fi
+
+    echo "Iniciando autenticación en GitHub CLI..."
+    echo "$GITHUB_TOKEN" | gh auth login --with-token
+    if [ $? -ne 0 ]; then
+        echo "Error: La autenticación en GitHub falló. Verifica tu token."
+        exit 1
+    fi
+    echo "Autenticación en GitHub completada con éxito."
 }
 
 # 2. Instalar dependencias necesarias
@@ -85,9 +93,9 @@ setup_phpmyadmin() {
     cd "$WEB_DIR"
     wget https://files.phpmyadmin.net/phpMyAdmin/${PHPMYADMIN_VERSION}/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz
     tar -xzf phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz
-    mv phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages "$DB_ADMIN_DIR"
+    mv phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages "$WEB_DIR/db_admin"
     rm phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz
-    cd "$DB_ADMIN_DIR"
+    cd "$WEB_DIR/db_admin"
     cp config.sample.inc.php config.inc.php
     cat <<EOL >> config.inc.php
 
@@ -101,52 +109,48 @@ EOL
     echo "phpMyAdmin configurado correctamente."
 }
 
-# 7. Descargar repositorio de GitHub
-clone_repository() {
-    echo "Autenticando y clonando repositorio de GitHub..."
-    echo "$GITHUB_TOKEN" | gh auth login --with-token
-    if [ $? -ne 0 ]; then
-        echo "Error: No se pudo autenticar en GitHub."
-        exit 1
-    fi
+# 7. Clonar repositorio y verificar archivo SQL
+clone_repository_and_check_sql() {
+    echo "Clonando repositorio de GitHub..."
     gh repo clone "$REPO_URL" "$WEB_DIR/$PROJECT_NAME"
     if [ $? -ne 0 ]; then
         echo "Error: No se pudo clonar el repositorio."
         exit 1
     fi
     echo "Repositorio clonado correctamente en $WEB_DIR/$PROJECT_NAME."
-}
 
-# 8. Crear enlace simbólico para almacenamiento externo
-create_symlink() {
-    echo "Creando enlace simbólico para acceder al proyecto desde el administrador de archivos..."
-    if [ -e "$SYMLINK_PATH" ]; then
-        rm -rf "$SYMLINK_PATH"
+    # Buscar archivo SQL
+    SQL_FILE=$(find "$WEB_DIR/$PROJECT_NAME" -type f -name "*.sql")
+    if [[ -n "$SQL_FILE" ]]; then
+        echo "Se encontró un archivo SQL: $SQL_FILE"
+
+        # Copiar archivo SQL a la carpeta Downloads
+        cp "$SQL_FILE" "$DOWNLOADS_DIR"
+        if [ $? -eq 0 ]; then
+            echo "Archivo SQL copiado a $DOWNLOADS_DIR correctamente."
+        else
+            echo "Error al copiar el archivo SQL a $DOWNLOADS_DIR."
+        fi
+    else
+        echo "No se encontró ningún archivo SQL en el repositorio clonado."
     fi
-    ln -s "$WEB_DIR" "$SYMLINK_PATH"
-    echo "Enlace simbólico creado en $SYMLINK_PATH."
 }
 
-# 9. Iniciar servicios
-start_services_and_projects() {
+# 8. Iniciar servicios
+start_services() {
     echo "Iniciando servicios..."
     apachectl start
     mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
     echo "Servicios iniciados correctamente."
-    echo "Servidor PHP para $PROJECT_NAME en localhost:8081..."
-    php -S localhost:8081 -t "$WEB_DIR/$PROJECT_NAME" &
-    echo "Servidor PHP para phpMyAdmin en localhost:8082..."
-    php -S localhost:8082 -t "$DB_ADMIN_DIR" &
 }
 
-# 10. Mensaje final
+# 9. Mensaje final
 final_message() {
     echo "---------------------------------------------------------------"
     echo "Instalación completa."
     echo "Accede al proyecto en: http://localhost:8081"
     echo "Accede a phpMyAdmin en: http://localhost:8082"
     echo "Usuario MariaDB: root | Contraseña: $MYSQL_ROOT_PASSWORD"
-    echo "Enlace simbólico creado en: $SYMLINK_PATH"
     echo "---------------------------------------------------------------"
 }
 
@@ -158,9 +162,8 @@ main() {
     setup_mariadb
     configure_php
     setup_phpmyadmin
-    clone_repository
-    create_symlink
-    start_services_and_projects
+    clone_repository_and_check_sql
+    start_services
     final_message
 }
 
