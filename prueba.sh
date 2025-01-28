@@ -13,13 +13,15 @@ LOG_DIR="/data/data/com.termux/files/usr/var/log"
 
 # 1. Solicitar el token al usuario
 get_github_token() {
+    pkg install -y gh
     echo "Por favor, introduce tu token de acceso personal de GitHub:"
     read -s GITHUB_TOKEN
     if [[ -z "$GITHUB_TOKEN" ]]; then
         echo "Error: El token de GitHub no puede estar vacío."
         exit 1
     fi
-      echo "Iniciando autenticación en GitHub CLI..."
+  
+    echo "Iniciando autenticación en GitHub CLI..."
     echo "$GITHUB_TOKEN" | gh auth login --with-token
     if [ $? -ne 0 ]; then
         echo "Error: La autenticación en GitHub falló. Verifica tu token."
@@ -32,7 +34,7 @@ get_github_token() {
 install_dependencies() {
     echo "Instalando dependencias necesarias..."
     pkg update && pkg upgrade -y
-    pkg install -y php apache2 mariadb wget tar openssl git gh
+    pkg install -y php apache2 mariadb wget tar openssl 
     echo "Dependencias instaladas correctamente."
 }
 
@@ -184,8 +186,8 @@ final_message() {
 # Función principal
 main() {
     termux-setup-storage
-    install_dependencies
     get_github_token
+    install_dependencies
     configure_apache
     setup_mariadb
     configure_php
