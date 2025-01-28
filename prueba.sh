@@ -4,7 +4,7 @@
 WEB_DIR="/data/data/com.termux/files/usr/share/apache2/default-site/htdocs"
 PROJECT_NAME="formulario_caracterizacion"
 REPO_URL="desarrollos-binariit/formulario_caracterizacion"
-DOWNLOADS_DIR="/sdcard/Downloads"
+DOWNLOADS_DIR="/sdcard/Download"
 MYSQL_ROOT_PASSWORD="alohomora"
 PHPMYADMIN_VERSION="5.1.4"
 PHP_INI_PATH="/data/data/com.termux/files/usr/etc/php/php.ini"
