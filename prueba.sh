@@ -19,8 +19,7 @@ get_github_token() {
         echo "Error: El token de GitHub no puede estar vacío."
         exit 1
     fi
-
-    echo "Iniciando autenticación en GitHub CLI..."
+      echo "Iniciando autenticación en GitHub CLI..."
     echo "$GITHUB_TOKEN" | gh auth login --with-token
     if [ $? -ne 0 ]; then
         echo "Error: La autenticación en GitHub falló. Verifica tu token."
@@ -185,8 +184,8 @@ final_message() {
 # Función principal
 main() {
     termux-setup-storage
-    get_github_token
     install_dependencies
+    get_github_token
     configure_apache
     setup_mariadb
     configure_php
