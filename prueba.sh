@@ -119,6 +119,19 @@ clone_repository_and_check_sql() {
     fi
     echo "Repositorio clonado correctamente en $WEB_DIR/$PROJECT_NAME."
 
+ 
+}
+
+# 8. Iniciar servicios
+start_services() {
+    echo "Iniciando servicios..."
+    apachectl start
+    mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
+    echo "Servicios iniciados correctamente."
+}
+
+# 9. Mensaje final
+final_message() {
     # Buscar archivo SQL
     SQL_FILE=$(find "$WEB_DIR/$PROJECT_NAME" -type f -name "*.sql")
     if [[ -n "$SQL_FILE" ]]; then
@@ -134,23 +147,12 @@ clone_repository_and_check_sql() {
     else
         echo "No se encontró ningún archivo SQL en el repositorio clonado."
     fi
-}
 
-# 8. Iniciar servicios
-start_services() {
-    echo "Iniciando servicios..."
-    apachectl start
-    mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
-    echo "Servicios iniciados correctamente."
-}
-
-# 9. Mensaje final
-final_message() {
     echo "---------------------------------------------------------------"
     echo "Instalación completa."
     echo "Accede al proyecto en: http://localhost:8081"
     echo "Accede a phpMyAdmin en: http://localhost:8082"
-    echo "Usuario MariaDB: root | Contraseña: $MYSQL_ROOT_PASSWORD"
+    echo "Usuario MariaDB: root | Contraseña: alo****** "
     echo "---------------------------------------------------------------"
 }
 
