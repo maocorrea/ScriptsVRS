@@ -4,38 +4,45 @@
 WEB_DIR="/data/data/com.termux/files/usr/share/apache2/default-site/htdocs"
 PROJECT_NAME="formulario_caracterizacion"
 REPO_URL="desarrollos-binariit/formulario_caracterizacion"
-DOWNLOADS_DIR="/sdcard/Download"  # Ruta correcta en tu dispositivo
+DOWNLOADS_DIR="/sdcard/Download"  # Ruta corregida
 MYSQL_ROOT_PASSWORD="alohomora"
 PHPMYADMIN_VERSION="5.1.4"
 PHP_INI_PATH="/data/data/com.termux/files/usr/etc/php/php.ini"
 SESSION_DIR="/data/data/com.termux/files/usr/tmp"
 LOG_DIR="/data/data/com.termux/files/usr/var/log"
 
-# 1. Solicitar el token al usuario
+# Variables de resumen
+AUTH_STATUS="No realizado"
+REPO_CLONE_STATUS="No realizado"
+SQL_COPY_STATUS="No realizado"
+PHP_SERVERS_STATUS="No iniciado"
+
+# 1. Instalar dependencias necesarias
+install_dependencies() {
+    echo "Instalando dependencias necesarias..."
+    pkg update && pkg upgrade -y
+    pkg install -y php apache2 mariadb wget tar openssl git gh
+    echo "Dependencias instaladas correctamente."
+}
+
+# 2. Solicitar el token al usuario
 get_github_token() {
-    pkg install -y gh
     echo "Por favor, introduce tu token de acceso personal de GitHub:"
     read -s GITHUB_TOKEN
     if [[ -z "$GITHUB_TOKEN" ]]; then
         echo "Error: El token de GitHub no puede estar vacío."
         exit 1
     fi
-  
+
     echo "Iniciando autenticación en GitHub CLI..."
     echo "$GITHUB_TOKEN" | gh auth login --with-token
     if [ $? -ne 0 ]; then
+        AUTH_STATUS="Fallida"
         echo "Error: La autenticación en GitHub falló. Verifica tu token."
         exit 1
     fi
+    AUTH_STATUS="Exitosa"
     echo "Autenticación en GitHub completada con éxito."
-}
-
-# 2. Instalar dependencias necesarias
-install_dependencies() {
-    echo "Instalando dependencias necesarias..."
-    pkg update && pkg upgrade -y
-    pkg install -y php apache2 mariadb wget tar openssl 
-    echo "Dependencias instaladas correctamente."
 }
 
 # 3. Configurar Apache con ServerName
@@ -109,74 +116,73 @@ EOL
     echo "phpMyAdmin configurado correctamente."
 }
 
-# 7. Clonar repositorio, validar y copiar archivo SQL
+# 7. Clonar repositorio y copiar archivo SQL
 clone_repository_and_copy_sql() {
     REPO_DIR="$WEB_DIR/$PROJECT_NAME"
 
     # Verificar si el repositorio ya existe
     if [ -d "$REPO_DIR" ]; then
-        echo "El repositorio ya existe en $REPO_DIR."
-        echo "Preservando archivos protegidos y eliminando el repositorio..."
-        
-        # Crear una carpeta temporal para guardar los archivos protegidos
-        TEMP_DIR="$WEB_DIR/temp_protected"
-        mkdir -p "$TEMP_DIR"
-
-        # Mover archivos protegidos a la carpeta temporal
-        mv "$REPO_DIR"/config.php "$TEMP_DIR/" 2>/dev/null || true
-        mv "$REPO_DIR"/.env "$TEMP_DIR/" 2>/dev/null || true
-
-        # Eliminar el repositorio existente
+        echo "El repositorio ya existe en $REPO_DIR. Eliminándolo..."
         rm -rf "$REPO_DIR"
-
-        # Restaurar los archivos protegidos después de clonar
-        echo "Archivos protegidos movidos a $TEMP_DIR. Serán restaurados después de clonar."
     fi
 
     echo "Clonando repositorio de GitHub..."
     gh repo clone "$REPO_URL" "$REPO_DIR"
     if [ $? -ne 0 ]; then
+        REPO_CLONE_STATUS="Fallida"
         echo "Error: No se pudo clonar el repositorio."
         exit 1
     fi
+    REPO_CLONE_STATUS="Exitosa"
     echo "Repositorio clonado correctamente en $REPO_DIR."
-
-    # Restaurar archivos protegidos
-    if [ -d "$TEMP_DIR" ]; then
-        mv "$TEMP_DIR"/* "$REPO_DIR/" 2>/dev/null || true
-        rmdir "$TEMP_DIR"
-        echo "Archivos protegidos restaurados en $REPO_DIR."
-    fi
 
     # Buscar archivo SQL
     SQL_FILE=$(find "$REPO_DIR" -type f -name "*.sql")
     if [[ -n "$SQL_FILE" ]]; then
         echo "Se encontró un archivo SQL: $SQL_FILE"
 
-        # Copiar archivo SQL a la carpeta Downloads
+        # Copiar archivo SQL a la carpeta Download
         cp "$SQL_FILE" "$DOWNLOADS_DIR"
         if [ $? -eq 0 ]; then
+            SQL_COPY_STATUS="Exitosa"
             echo "Archivo SQL copiado a $DOWNLOADS_DIR correctamente."
         else
+            SQL_COPY_STATUS="Fallida"
             echo "Error al copiar el archivo SQL a $DOWNLOADS_DIR."
         fi
     else
+        SQL_COPY_STATUS="No encontrado"
         echo "No se encontró ningún archivo SQL en el repositorio clonado."
     fi
 }
 
-# 8. Iniciar servicios
+# 8. Iniciar servicios y servidores PHP
 start_services() {
     echo "Iniciando servicios..."
     apachectl start
     mysqld_safe --datadir=/data/data/com.termux/files/usr/var/lib/mysql &
-    echo "Servicios iniciados correctamente."
+
+    echo "Levantando servidor PHP para $PROJECT_NAME en localhost:8081..."
+    php -S localhost:8081 -t "$WEB_DIR/$PROJECT_NAME" &
+    echo "Servidor PHP para $PROJECT_NAME levantado en http://localhost:8081"
+
+    echo "Levantando servidor PHP para db_admin en localhost:8082..."
+    php -S localhost:8082 -t "$WEB_DIR/db_admin" &
+    echo "Servidor PHP para phpMyAdmin levantado en http://localhost:8082"
+
+    PHP_SERVERS_STATUS="Iniciados correctamente"
 }
 
-# 9. Mensaje final
+# 9. Mensaje final con resumen
 final_message() {
     echo "---------------------------------------------------------------"
-    echo "Instalación completa."
+    echo "INSTALACIÓN COMPLETA - RESUMEN"
+    echo "---------------------------------------------------------------"
+    echo "Autenticación en GitHub: $AUTH_STATUS"
+    echo "Clonación del repositorio: $REPO_CLONE_STATUS"
+    echo "Copia de archivo SQL: $SQL_COPY_STATUS"
+    echo "Estado de los servidores PHP: $PHP_SERVERS_STATUS"
+    echo ""
     echo "Accede al proyecto en: http://localhost:8081"
     echo "Accede a phpMyAdmin en: http://localhost:8082"
     echo "Usuario MariaDB: root | Contraseña: $MYSQL_ROOT_PASSWORD"
@@ -186,8 +192,8 @@ final_message() {
 # Función principal
 main() {
     termux-setup-storage
-    get_github_token
     install_dependencies
+    get_github_token
     configure_apache
     setup_mariadb
     configure_php
